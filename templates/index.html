@@ -1,0 +1,35 @@
+{% include "header.html" %}
+<style>
+    #login_form{
+        width: 65%;
+        padding-left: 40%;
+    }
+</style>
+<script>
+function myFunction() {
+  var x = document.getElementById("myInput");
+  if (x.type === "password") {
+    x.type = "text";
+  } else {
+    x.type = "password";
+  }
+}
+</script>
+<body>
+    <div id="login_form">
+        {% if error %}
+       <p>{{error}}</p>
+        {% endif %}
+        <form method="post" action="/login">
+            <label for="user">Email or Username:</label><br>
+            <input type="text" autocomplete="off" autofocus class="feedback-input" name="user" placeholder="Username"><br>
+            <label for="pass">Password:</label><br>
+            <input type="password" id="myInput" class="feedback-input" name="pass" placeholder="Password">
+            <input type="checkbox" onclick="myFunction()">Show Password
+            <button type="submit">LOG IN</button>
+        </form>
+    <p>Don't have an account? <a href="/register">Register</a></p>
+    </div>
+</body>
+
+{% include "footer.html" %}

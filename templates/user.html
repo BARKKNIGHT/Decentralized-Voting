@@ -1,0 +1,24 @@
+{% include "header.html" %}
+<style>
+    #logout{
+        width: 65%;
+        padding-left: 35%;
+    }
+</style>
+<body>
+    {% if USER_INFO %}
+    <h1>{{USER_INFO}}</h1>
+    {% endif %}
+    <img class="profile" src="{{ url_for('static', filename='cat.jpeg') }}" alt="cat profile">
+    <!-- <form action="/delete" method="post">
+        <p>
+            <button type="submit">DELETE ACCOUNT</button>
+        </p>
+    </form> -->
+    <form id="logout" action="/logout" method="post">
+        <p>
+            <button type="submit">LOGOUT</button>
+        </p>
+    </form>
+</body>
+  {% include "footer.html" %}

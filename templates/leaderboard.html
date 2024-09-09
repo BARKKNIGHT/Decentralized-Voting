@@ -1,0 +1,34 @@
+{% include('header.html') %}
+
+<body>
+  <div id="head" class="text-center">
+    <h2 align="center">Leaderboard</h2> 
+    <br/> 
+  </div>
+  <div id="candidate" class="container"> 
+    <table class="table text-center">
+      <thead>
+        <tr>
+          <th>Score</th>
+          <th>Name</th>
+          <th>Carbon Footprint(gms)</th>
+        </tr>
+      </thead>
+      <tbody id="boxCandidate">
+        <tr>
+          <td>1.</td>
+          <td>test_user</td>
+          <td>1200</td>
+        </tr>
+        <tr>
+          <td>2.</td>
+          <td>other_user</td>
+          <td>1300</td>
+        </tr>
+      </tbody>
+    </table>
+    <br/>
+  </div>
+</body>
+
+{% include('footer.html') %}

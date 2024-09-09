@@ -1,0 +1,10 @@
+{% include "header.html" %}
+{% if error %}
+<h1 style="padding-top: 10%;">{{error}}</h1>
+{% endif %}
+<br>
+<form action="/result">
+    <button type="submit">Continue</button>
+</form>
+{% include "footer.html" %}
+
