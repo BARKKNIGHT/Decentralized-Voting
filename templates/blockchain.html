@@ -1,0 +1,23 @@
+{% include "header.html" %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blockchain</title>
+</head>
+<body>
+    <h1>Blockchain</h1>
+    <ul>
+        {% for block in blockchain %}
+        <li>
+            <strong>Block {{ block.index }}:</strong>
+            <p>Timestamp: {{ block.timestamp }}</p>
+            <p>Nonce: {{ block.nonce }}</p>
+            <p>Previous Hash: {{ block.previous_hash }}</p>
+            <p>Transactions: {{ block.transactions }}</p>
+            <p>Hash: {{ block.hash }}</p>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
+{% include "footer.html" %}

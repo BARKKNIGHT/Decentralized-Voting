@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, abort,url_for
 from flask_login import login_required, LoginManager, UserMixin, login_user, logout_user,current_user
+from block import Block
+from blockchain import Blockchain
 from flask_session import Session
 from cs50 import SQL
 import hashlib
@@ -8,6 +10,9 @@ import os
 import sqlite3
 
 app = Flask(__name__)
+
+#init blockchain
+blockchain = Blockchain()
 
 # Configuration
 app.config['SESSION_PERMANENT'] = False
@@ -32,8 +37,26 @@ def init_db():
             user TEXT NOT NULL,
             password TEXT NOT NULL,
             salt TEXT NOT NULL,
-            carbon_footprint INTEGER DEFAULT 0
-        )
+            voted INTEGER DEFAULT 0
+        )                     
+        ''')
+        conn.commit()
+        cursor.execute('''
+        CREATE TABLE candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate TEXT NOT NULL,
+            party TEXT NOT NULL,
+            votes INTEGER DEFAULT 0
+        )  
+        ''')
+        conn.commit()
+        cursor.execute('''
+        CREATE TABLE blockchain (
+            index INTEGER PRIMARY KEY,
+            hash TEXT NOT NULL,
+            party TEXT NOT NULL,
+            votes INTEGER DEFAULT 0
+        )  
         ''')
         conn.commit()
         conn.close()
@@ -133,11 +156,6 @@ def register():
     else:
         return render_template("register.html")
 
-# @app.route('/map')
-# @login_required
-# def map():
-#     return render_template("maps.html",USER_INFO=session['name'])
-
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html', error=e.code), 404
@@ -153,38 +171,51 @@ def leaderboard():
         # Render the leaderboard template with the data
         return render_template('leaderboard.html', leaderboard_data=leaderboard_data,User_Info=session.get('name'))
 
-@app.route('/vote',methods=['GET','POST'])
+@app.route('/vote', methods=['GET', 'POST'])
 @login_required
 def vote():
-    if request.method=='GET':
+    if request.method == 'GET':
         data = session.get('name')
-        voted = db.execute('SELECT voted FROM users WHERE user=?',data)
-        if voted[0]['voted']==0:
+        voted = db.execute('SELECT voted FROM users WHERE user=?', data)
+        if voted[0]['voted'] == 1:
             candidates = db.execute('SELECT * FROM candidates;')
-            return render_template('vote.html',candidates=candidates)
+            return render_template('vote.html', USER_INFO=data, candidates=candidates)
         else:
-            return render_template('gotvote.html',error = "Successfully Voted!")
-    elif request.method=='POST':
+            return render_template('gotvote.html', USER_INFO=session.get('name'), error="Successfully Voted!")
+
+    elif request.method == 'POST':
         candidate = request.form.to_dict().keys()
         candidate = list(candidate)[0]
-        votes = db.execute('SELECT candidate,votes FROM candidates WHERE candidate=?',(candidate))
-        votes = votes[0]['votes']
-        print(votes)
-        votes = votes+1
-        db.execute('UPDATE candidates SET votes = ? WHERE candidate = ?;',(votes),(candidate))
-        db.execute('UPDATE users SET voted = ? WHERE user = ?',1,session.get('name'))
-        return render_template('gotvote.html',error = "Successfully Voted!")
+        
+        # Create a new transaction in the blockchain for the vote
+        new_transaction = {
+            'user': session.get('name'),
+            'vote': candidate
+        }
+        blockchain.add_transaction(new_transaction)
+
+        # Update vote count in the database
+        votes = db.execute('SELECT candidate, votes FROM candidates WHERE candidate=?', (candidate))
+        votes = votes[0]['votes'] + 1
+        db.execute('UPDATE candidates SET votes = ? WHERE candidate = ?;', votes, candidate)
+        db.execute('UPDATE users SET voted = ? WHERE user = ?', 1, session.get('name'))
+
+        # Mine the pending transactions (if 5 transactions in pending already)
+        blockchain.mine_pending_transactions()
+
+        return render_template('gotvote.html', USER_INFO=session.get('name'), error="Successfully Voted!")
+
 
 @app.route('/result')
 @login_required
-def result():
+def result():       
     candidates = db.execute('SELECT * FROM candidates;')
     print(candidates)
     # lead=lead
-    return render_template('result.html',candidates=candidates)
+    return render_template('result.html',USER_INFO=session.get('name'),candidates=candidates)
 
 @app.route('/admin',methods=['GET','POST'])
-@login_required
+# @login_required
 def admin():
     if request.method=='GET':
         candidates = db.execute('SELECT * FROM candidates;')
@@ -200,6 +231,24 @@ def admin():
         else:
             candidates = db.execute('SELECT * FROM candidates;')
             return render_template('admin.html',candidates=candidates,error="Candidate already exists!")
+
+@app.route('/blockchain', methods=['GET'])
+@login_required
+def view_blockchain():
+    chain = blockchain.chain  # Get the current chain
+    return render_template('blockchain.html', blockchain=chain)
+
+@app.route('/mine', methods=['GET'])
+@login_required
+def mine_block():
+    blockchain.mine_pending_transactions()  # Mine all pending transactions
+    return redirect(url_for('view_blockchain'))
+
+@app.route('/validate', methods=['GET'])
+@login_required
+def validate_blockchain():
+    is_valid = blockchain.is_chain_valid()
+    return render_template('validate.html', is_valid=is_valid)
 
 @app.errorhandler(401)
 def unauthorized(e):
