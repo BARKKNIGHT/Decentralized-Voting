@@ -2,7 +2,7 @@
 
   <body>
     <div id="head" class="text-center">
-      <h1 align="center">Decentralized Voting Using Ethereum Blockchain</h1>
+      <h1 align="center">Decentralized Voting Using Blockchain</h1>
       <h2 align="center">Welcome for Voting</h2> 
       <h3 align="center"><p>Voting Dates: <span id="dates"></span></p></h3>
       <br/> 
@@ -20,7 +20,7 @@
           </thead>
           <tbody id="boxCandidate">
             {% for i in candidates %}
-            <td><input type="radio" name="{{i.candidate}}" value="vote"></td>
+            <td><input type="radio" name="candidate_name" value="{{i.candidate}}"></td>
             <td>{{i.candidate}}</td>
             <td>{{i.party}}</td>
             <td>{{i.votes}}</td>
@@ -29,7 +29,7 @@
         </table>
         <br/>
       </div>
-      <div style="s">
+      <div>
         <button type="submit">VOTE</button>
       </div>
     </form>
