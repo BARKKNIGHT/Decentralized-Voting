@@ -44,8 +44,8 @@ def home():
 def get_chain():
     chain_data = []
     for block in blockchain.chain:
-        chain_data.append(block.__dict__)
-    return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(nodes)})
+        chain_data.append(block.todict())
+    return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(blockchain.peer_nodes)})
 
 # Update the add_transaction function to broadcast changes
 @app.route('/add_transaction', methods=['POST'])
