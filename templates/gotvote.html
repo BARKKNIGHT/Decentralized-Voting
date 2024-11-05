@@ -3,8 +3,27 @@
 <h1 style="padding-top: 10%;">{{error}}</h1>
 {% endif %}
 <br>
-<form action="/result">
-    <button type="submit">Continue</button>
+{% if not block %}
+<form action="/vote">
+    <button type="submit">Verify</button>
 </form>
+{% endif %}
+{%if block %}
+    {% if block == 'VOTE NOT FOUND!' %}
+    <form action="/vote">
+        <button type="submit">Verify</button>
+    </form>
+    {% endif %}
+    {% if block != 'VOTE NOT FOUND!' %}
+    <ul>
+        <li>
+            <!-- <strong>Block {{ block }}:</strong> -->
+            <p>Timestamp: {{ block['Timestamp'] }}</p>
+            <p>Transactions: {{ block['Transactions'] }}</p>
+            <p>Public_keys: {{ block['Public_keys'] }}</p>
+        </li>
+    </ul>
+    {% endif %}
+{% endif %}
 {% include "footer.html" %}
 

@@ -10,15 +10,11 @@ def init_db(DATABASE):
             block_json TEXT NOT NULL
         )  
         ''')
-        conn.commit()
         cursor.execute('''
-        CREATE TABLE candidates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            candidate TEXT NOT NULL,
-            party TEXT NOT NULL,
-            votes INTEGER DEFAULT 0
+        CREATE TABLE peers (
+            id INTEGER PRIMARY KEY,
+            peers TEXT NOT NULL
         )  
         ''')
         conn.commit()
-        conn.close()
 
