@@ -1,180 +1,187 @@
-from flask import Flask, render_template, request, redirect, session,url_for
-from flask_login import login_required, LoginManager, UserMixin, login_user, logout_user,current_user
-from User.hash_method import  hashing_password,login_hash
-from User.init_db import init_db
-from flask_session import Session
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from Blockchain.block import Block
+from Blockchain.blockchain import Blockchain
+from Blockchain.sql_handler import sql_handler
+from Blockchain.init_db import init_db
+import User.init_db
+from Blockchain.consensus import valid_chain
+from urllib.parse import urlparse
+import json
 from cs50 import SQL
 import requests
 import secrets
-
-app = Flask(__name__)
-
-# Configuration
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SECRET_KEY'] = secrets.token_hex(16)
-Session(app)
-
-# Flask-Login configuration
-login_manager = LoginManager()
-login_manager.init_app(app)
+import os
 
 # Database setup
-DATABASE = "voters.db"
+DATABASE = "blockchain.db"
+DATABASE_USER = "voters.db"
 
-init_db(DATABASE)
+# initialize the database
+init_db(DATABASE=DATABASE)
+User.init_db.init_db(DATABASE=DATABASE_USER)
+
+
+# app
+app = Flask(__name__)
+
+# blockchain handlers
+handler = sql_handler(DATABASE=DATABASE, DATABASE_USER=DATABASE_USER)
+app.config['SECRET_KEY'] = secrets.token_hex(16)
+
+# Database handler
 db = SQL(f"sqlite:///{DATABASE}")
 
-# User class for Flask-Login
-class User(UserMixin):
-    def __init__(self, id):
-        self.id = id
+# pending blocks
+pending_blocks = []
+limit_pending = 6  # limit number of pending blocks
 
-# Routes
+# List to store known nodes in the network
+cursor = db.execute('SELECT * FROM peers;')
+nodes_set = set()
+if cursor!=[]:
+    for i in cursor:
+        nodes_set.add(i['peers'])
+
+def broadcast_block():
+    """Broadcast the latest block to all nodes in the network."""
+    new_block = handler.blockchain.chain[-1]
+    block_dict = new_block.to_dict()
+    for node in nodes_set:
+        try:
+            requests.post(f'http://{node}/append_block', json=json.dumps(block_dict))
+        except requests.exceptions.RequestException as e:
+            print(f"Could not reach node {node}: {e}")
+
 @app.route('/')
-def index():
-    if current_user.is_authenticated:
-        return redirect(url_for('vote'))
-    return render_template("index.html")
+def home():
+    print(nodes_set)
+    broadcast_block()
+    return redirect('/blockchain')
 
-@app.route('/about')
-def about():
-    return render_template('about.html',USER_INFO=session.get('name'))
-
-@app.route('/contact')
-def contact():
-    return render_template('contact.html',USER_INFO=session.get('name'))
-
-@app.route('/login', methods=['POST', 'GET'])
-def login():
-    if request.method == 'POST':
-        user = request.form['user']
-        password = request.form['pass']
-        session['name'] = user
-
-        try:
-            cursor = db.execute('SELECT user, password, salt FROM users WHERE user = ?', user)
-            if cursor:
-                salt = cursor[0]['salt']
-                hashed_password = login_hash(password, salt)
-                if hashed_password == cursor[0]['password']:
-                    user_obj = User(user)
-                    login_user(user_obj)
-                    return redirect('vote')
+@app.route('/append_block', methods=['POST'])
+def append_block():
+    global pending_blocks
+    values = request.get_json()
+    block = Block.from_dict(json.loads(values))
+    if block.index == handler.blockchain.chain[-1].index + 1 or (pending_blocks and block.index == pending_blocks[-1].index):
+        pending_blocks.append(block)
+    if len(pending_blocks) > limit_pending:
+        for i in range(len(pending_blocks)):
+            if prev_hash == pending_blocks[i].previous_hash:
+                hash = pending_blocks[i].hash
+                curr_hash = pending_blocks[i].compute_hash()
+                if curr_hash == hash:
+                    pending_blocks[i].hash = hash
+                    prev_hash = hash
                 else:
-                    return render_template('index.html', error="INCORRECT LOGIN INFORMATION!")
+                    pending_blocks = pending_blocks[:pending_blocks[i - 1].index]
+                    return jsonify({'validity': False, 'index': pending_blocks[i - 1].index}), 500
             else:
-                return render_template('index.html', error="USER DOESN'T EXIST!")
-        except Exception as e:
-            return render_template('index.html', error=str(e))
+                return jsonify({'validity': False, 'index': pending_blocks[i].index}), 500
     else:
-        return redirect('/')
+        return jsonify({'validity': True, 'index': None}), 201
 
-@app.route('/logout',methods=['POST','GET'])
-def logout():
-    data = session.get('name')
-    session.clear()
-    logout_user()
-    return render_template('logout.html', user=data)
+@app.route('/get_chain', methods=['GET'])
+def get_chain():
+    chain_data = [block.to_dict() for block in handler.blockchain.chain]
+    return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(nodes_set)})
 
-@app.route('/user', methods=['GET'])
-@login_required
-def user_data():
-    return render_template('user.html', USER_INFO=session.get('name'))
-
-@app.route('/delete', methods=['POST'])
-@login_required
-def delete():
-    if request.method == 'POST':
-        db.execute('DELETE FROM users WHERE user = ?', session.get('name'))
-        return redirect('/logout')
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        user = request.form['user']
-        password = request.form['pass']
-        salt, hashed_password = hashing_password(password)
-
-        try:
-            cursor = db.execute('SELECT * FROM users WHERE user = ?', user)
-            if not cursor:
-                db.execute('INSERT INTO users (user, password, salt,voted) VALUES (?, ?, ?, ?)', user, hashed_password, salt,0)
-                return render_template('index.html', error='Registration successful')
-            else:
-                return render_template('register.html', error='User already exists')
-        except Exception as e:
-            return render_template('register.html', error=str(e))
+@app.route('/add_vote', methods=['POST'])
+def add_transaction():
+    new_transaction = request.json
+    temp = handler.add_vote(new_transaction)
+    if isinstance(temp, bool) and temp:
+        broadcast_block()
+        for node in nodes_set:
+            requests.get(f'http://{node}/nodes/resolve')
+        return jsonify({"message": "Vote cast successfully!"}), 201
+    elif isinstance(temp,dict) and temp.get('status') == True:
+        broadcast_block()
+        for node in nodes_set:
+            requests.get(f'http://{node}/nodes/resolve')
+        return jsonify({"message": f"Vote cast successfully!\nTime: {temp['transaction_times'][new_transaction['public_key']]} seconds"}), 201
     else:
-        return render_template("register.html")
+        handler.push_blockchain()
+        for node in nodes_set:
+            requests.get(f'http://{node}/nodes/resolve')
+        return jsonify({"message": "User already voted!"}), 500
 
-@app.errorhandler(404)
-def page_not_found(e):
-    return render_template('404.html', error=e.code), 404
+@app.route('/blockchain', methods=['GET'])
+def view_blockchain():
+    chain = handler.blockchain.chain
+    return render_template('blockchain.html', blockchain=chain)
 
-@app.errorhandler(500)
-def internal_server_error(e):
-    return render_template('404.html', error=e.code), 500
-@app.route('/leaderboard')
-def leaderboard():
-        # Retrieve the leaderboard data from the database
-        leaderboard_data = db.execute('SELECT user, carbon_footprint FROM users ORDER BY carbon_footprint DESC')
+@app.route('/mine', methods=['GET'])
+def mine_block():
+    handler.blockchain.mine_pending_votes()
+    handler.push_blockchain()
+    broadcast_block()
+    resolve_conflicts()
+    return redirect(url_for('view_blockchain'))
 
-        # Render the leaderboard template with the data
-        return render_template('leaderboard.html', leaderboard_data=leaderboard_data,User_Info=session.get('name'))
+@app.route('/validate', methods=['GET'])
+def validate_blockchain():
+    is_valid = handler.blockchain.is_chain_valid()
+    return render_template('validate.html', is_valid=is_valid)
 
-@app.route('/vote', methods=['GET', 'POST'])
-@login_required
-def vote():
-    if request.method == 'GET':
-        data = session.get('name')
-        voted = db.execute('SELECT voted FROM users WHERE user = ?', (data,))
-        print(voted)
-        if voted and voted[0]['voted'] == 0:
-            candidates = db.execute('SELECT * FROM candidates')
-            print(candidates)
-            return render_template('vote.html', USER_INFO=data, candidates=candidates)
-        else:
-            return render_template('gotvote.html', USER_INFO=data, error="You have already voted!")
-
-    elif request.method == 'POST':
-        data = session.get('name')
-        candidate = request.form.get('candidate_name')
-        print(candidate)
-        if not candidate:
-            return render_template('vote.html', USER_INFO=session.get('name'), error="No candidate selected.")
-
-        # Create a new transaction in the blockchain for the vote
-        new_transaction = {
-        'public_key':db.execute('SELECT salt FROM users WHERE user = ?', (data,))[0]['salt'],
-        'vote':f"{candidate}"
-    }
-        try:
-            r = requests.post('http://127.0.0.1:5001/add_transaction', json=new_transaction)
-            r.raise_for_status()  # Ensure the request was successful
-            print("........")
-            # Update vote count and user status in the database
-            db.execute('UPDATE users SET voted = ? WHERE user = ?', 1, session.get('name'))
-            return render_template('gotvote.html', USER_INFO=session.get('name'), error="Successfully Voted!")
-        except:
-            return render_template('404.html', USER_INFO=session.get('name'), error="Invalid candidate.")
+@app.route('/verify_vote',methods=['GET','POST'])
+def verify_vote():
+    pub_key = request.json['public_key']
+    vote = handler.verify_vote(pub_key)
+    return vote
 
 @app.route('/result')
-@login_required
-def result():       
-    candidates = db.execute('SELECT * FROM candidates;')
-    print(candidates)
-    # lead=lead
-    return render_template('result.html',USER_INFO=session.get('name'),candidates=candidates)
+def result():
+    votes = handler.calculate_votes()
+    return render_template('result.html', candidates=votes)
 
-@app.errorhandler(401)
-def unauthorized(e):
-    return render_template('404.html', error=e.code), 401
+@app.route('/nodes/register', methods=['POST'])
+def register_nodes():
+    values = request.get_json()
+    nodes = values['nodes']
+    if nodes is None:
+        return "Error: Please supply a valid list of nodes", 400
+    for node in nodes:
+        if node not in nodes_set:
+            nodes_set.add(node)
+            db.execute('INSERT INTO peers(peers) VALUES (?)',node)
+    return jsonify({'message': 'New nodes have been added', 'total_nodes': list(nodes_set)}), 201
 
-# User loader for Flask-Login
-@login_manager.user_loader
-def load_user(user_id):
-    return User(user_id)
+@app.route('/nodes/resolve', methods=['GET'])
+def consensus():
+    """Resolve conflicts by replacing the chain with the longest one in the network."""
+    replaced = resolve_conflicts()
+    if replaced:
+        return jsonify({"message": "Chain was replaced with a longer, valid chain."}), 200
+    else:
+        return jsonify({"message": "This chain is already the longest, no replacement occurred."}), 200
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0",port=5000,debug=True)
+def resolve_conflicts():
+    """Resolve conflicts by replacing our chain with the longest one in the network."""
+    longest_chain = None
+    max_length = len(handler.blockchain.chain)
+    for node in nodes_set:
+        try:
+            print(node)
+            response = requests.get(f'http://{node}/get_chain')
+            print(response)
+            if response.status_code == 200:
+                chain_data = response.json()
+                length = chain_data['length']
+                chain = [Block.from_dict(b) for b in chain_data['chain']]
+                if length > max_length and valid_chain(chain):
+                    max_length = length
+                    longest_chain = chain
+        except requests.exceptions.RequestException as e:
+            print(f"Error connecting to node {node}: {e}")
+
+    if longest_chain:
+        handler.blockchain.chain = longest_chain
+        handler.push_blockchain()
+        return True
+    return False
+
+if __name__ == '__main__':
+    port = 5001  # Default port; adjust for other nodes
+    resolve_conflicts()
+    app.run(host='0.0.0.0', port=port)
