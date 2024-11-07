@@ -132,7 +132,6 @@ def vote():
     if request.method == 'GET':
         data = session.get('name')
         voted = db.execute('SELECT voted FROM users WHERE user = ?', (data,))
-        print(voted)
         if voted and voted[0]['voted'] == 0:
             candidates = db.execute('SELECT * FROM candidates')
             return render_template('vote.html', USER_INFO=data, candidates=candidates)
@@ -142,13 +141,11 @@ def vote():
                         }
             r = requests.post('http://127.0.0.1:5001/verify_vote', json=dictionary)
             block = json.loads(r.content)
-            print(block)
             return render_template('gotvote.html', USER_INFO=data,block=block, error="You have already voted!")
 
     elif request.method == 'POST':
         data = session.get('name')
         candidate = request.form.get('candidate_name')
-        print(candidate)
         if not candidate:
             return render_template('vote.html', USER_INFO=session.get('name'), error="No candidate selected.")
 

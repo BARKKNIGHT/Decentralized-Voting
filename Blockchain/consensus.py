@@ -20,7 +20,7 @@ def valid_proof(last_block, block,difficulty):
     # Verify the block's hash starts with the number of zeroes defined by the difficulty level
     return startswith(block,'0' * difficulty) and block.previous_hash == last_block.hash
 
-def valid_chain(chain):
+def valid_chain(chain,difficulty):
         """
         Determine if a given blockchain is valid
         :param chain: A blockchain
@@ -36,7 +36,7 @@ def valid_chain(chain):
                 return False
 
             # Check that the Proof of Work is correct
-            if not valid_proof(last_block, block,4):
+            if not valid_proof(last_block, block,difficulty):
                 return False
 
             last_block = block

@@ -24,7 +24,7 @@ User.init_db.init_db(DATABASE=DATABASE_USER)
 app = Flask(__name__)
 
 # blockchain handlers
-handler = sql_handler(DATABASE=DATABASE, DATABASE_USER=DATABASE_USER)
+handler = sql_handler(DATABASE=DATABASE, DATABASE_USER=DATABASE_USER,difficulty=5,transactions=1)
 app.config['SECRET_KEY'] = secrets.token_hex(16)
 
 # Database handler
@@ -34,7 +34,7 @@ db = SQL(f"sqlite:///{DATABASE}")
 pending_blocks = []
 limit_pending = 6  # limit number of pending blocks
 
-# List to store known nodes in the network
+# List to store known nodes in the net
 cursor = db.execute('SELECT * FROM peers;')
 nodes_set = set()
 if cursor!=[]:
@@ -48,7 +48,6 @@ def broadcast_block():
     for node in nodes_set:
         try:
             r = requests.post(f'http://{node}/append_block', json=json.dumps(block_dict))
-            print(r.content)
         except requests.exceptions.RequestException as e:
             print(f"Could not reach node {node}: {e}")
 
@@ -68,7 +67,6 @@ def append_block():
         temp = False    
     if (block.index == (handler.blockchain.chain[-1].index + 1)) or temp:
         pending_blocks.append(block)
-        print(pending_blocks)
         if len(pending_blocks) > limit_pending:
             prev_hash = handler.blockchain.chain[-1].hash
             for i in range(len(pending_blocks)):
@@ -165,14 +163,12 @@ def resolve_conflicts():
     max_length = len(handler.blockchain.chain)
     for node in nodes_set:
         try:
-            print(node)
             response = requests.get(f'http://{node}/get_chain')
-            print(response)
             if response.status_code == 200:
                 chain_data = response.json()
                 length = chain_data['length']
                 chain = [Block.from_dict(b) for b in chain_data['chain']]
-                if length > max_length and valid_chain(chain):
+                if length > max_length and valid_chain(chain,handler.blockchain.difficulty):
                     max_length = length
                     longest_chain = chain
         except requests.exceptions.RequestException as e:

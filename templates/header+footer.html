@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.png') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.2/css/all.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='content.css') }}">
+  <title>Decentralized Voting System</title>
+  <style>
+    /* Navbar Styling */
+    .navbar-mainbg {
+      padding: 15px 0;
+    }
+    .navbar-nav .nav-link:hover {
+      color: #007bff !important;
+    }
+
+    /* Content Styling */
+    #head {
+      margin-top: 30px;
+      margin-bottom: 30px;
+    }
+    #candidate {
+      background-color: #f8f9fa;
+      padding: 20px;
+      border-radius: 5px;
+    }
+    #candidate th {
+      font-weight: bold;
+    }
+    #account {
+      background-color: #e9ecef;
+      padding: 20px;
+      border-radius: 5px;
+      margin-top: 30px;
+    }
+
+    /* Footer Styling */
+    footer {
+      margin-top: 50px;
+      padding: 20px 0;
+    }
+    .menu li a {
+      color: #007bff;
+      font-weight: bold;
+    }
+    .menu li a:hover {
+      color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="navbar navbar-expand-custom navbar-mainbg">
+      <a class="navbar-brand navbar-logo" href="/">Voting System</a>
+      <button class="navbar-toggler" type="button" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <i class="fas fa-bars text-white"></i>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/user"><i class="fa fa-fw fa-user-alt"></i>{{USER_INFO}}</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div id="head" class="text-center">
+      <h1>Decentralized Voting Using Blockchain</h1>
+      <h2>Welcome for Voting</h2>
+      <h3><p>Voting Dates: <span id="dates"></span></p></h3>
+    </div>
+
+    <form action="/vote" method="post">
+      <div id="candidate" class="container">
+        <table class="table text-center">
+          <thead>
+            <tr>
+              <th>Choice</th>
+              <th>Name</th>
+              <th>Party</th>
+              <th>Total Vote</th>
+            </tr>
+          </thead>
+          <tbody id="boxCandidate">
+            {% for i in candidates %}
+            <tr>
+              <td><input type="radio" name="candidate_name" value="{{i.candidate}}"></td>
+              <td>{{i.candidate}}</td>
+              <td>{{i.party}}</td>
+              <td>{{i.votes}}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="text-center">
+        <button type="submit" class="btn btn-primary">VOTE</button>
+      </div>
+    </form>
+
+    <div id="account" class="text-center">
+      <p id="accountAddress"></p>
+    </div>
+  </main>
+
+  <footer>
+    <div class="waves">
+      <div class="wave" id="wave1"></div>
+      <div class="wave" id="wave2"></div>
+      <div class="wave" id="wave3"></div>
+      <div class="wave" id="wave4"></div>
+    </div>
+    <ul class="social_icon">
+      <li><a href="https://www.facebook.com/" target="_blank" rel="noreferrer noopener"><ion-icon name="logo-facebook"></ion-icon></a></li>
+      <li><a href="https://x.com/home?lang=en" target="_blank" rel="noreferrer noopener"><ion-icon name="logo-twitter"></ion-icon></a></li>
+      <li><a href="https://www.linkedin.com/home?originalSubdomain=in" target="_blank" rel="noreferrer noopener"><ion-icon name="logo-linkedin"></ion-icon></a></li>
+      <li><a href="https://www.instagram.com/" target="_blank" rel="noreferrer noopener"><ion-icon name="logo-instagram"></ion-icon></a></li>
+    </ul>
+    <ul class="menu">
+      <li><a href="/">Home</a></li>
+      <li><a href="/about">About</a></li>
+      <!-- <li><a href="/service">Services</a></li> -->
+      <!-- <li><a href="/team">Team</a></li> -->
+      <li><a href="/contact">Contact</a></li>
+    </ul>
+  </footer>
+
+  <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+</body>
+</html>

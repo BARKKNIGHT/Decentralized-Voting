@@ -3,13 +3,13 @@ import requests
 import time
 
 class Blockchain:
-    # Number of transactions before a block is hashed.
-    transactions = 1
     # blockchain structure : 
-    def __init__(self): 
+    def __init__(self,difficulty=4,transactions=1): 
         self.chain: list[Block] = []
         self.pending_transactions: list[dict] = []
         # Initialize with genesis block
+        self.difficulty = difficulty
+        self.transactions = transactions # Number of transactions before a block is hashed.
         self._create_genesis_block()
 
     def _create_genesis_block(self): #first block
@@ -31,15 +31,15 @@ class Blockchain:
 
     def mine_pending_votes(self): #push pending transactions into a new block(max transacs = 6) and (min transacs = 1)
         last_block = self.get_last_block()
-        if len(self.pending_transactions)>Blockchain.transactions-1:
+        if len(self.pending_transactions)>self.transactions-1:
             start_time = time.time()
             new_block = Block(index=last_block.index + 1, 
                                 previous_hash=last_block.hash, 
-                                transactions=self.pending_transactions[0:Blockchain.transactions],
-                                public_keys = ([x['public_key'] for x in self.pending_transactions[0:Blockchain.transactions]])
+                                transactions=self.pending_transactions[0:self.transactions],
+                                public_keys = ([x['public_key'] for x in self.pending_transactions[0:self.transactions]])
                             )
-            self.pending_transactions = self.pending_transactions[Blockchain.transactions:]
-            new_block.nonce = self.proof_of_work(new_block)
+            self.pending_transactions = self.pending_transactions[self.transactions:]
+            new_block.nonce = self.proof_of_work(new_block,self.difficulty)
             self.add_block(new_block)
             stop_time = time.time()
             transaction_times = {
@@ -125,3 +125,4 @@ class Blockchain:
                 else:
                     dict_votes[self.chain[i].transactions[j]['vote']] = 1
         return dict_votes
+

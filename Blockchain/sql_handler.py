@@ -6,10 +6,10 @@ import datetime
 import json
 
 class sql_handler:
-    def __init__(self,DATABASE,DATABASE_USER):
+    def __init__(self,DATABASE,DATABASE_USER,difficulty=4,transactions=1):
         self.db = SQL(f"sqlite:///{DATABASE}")
         self.user_db = SQL(f"sqlite:///{DATABASE_USER}")
-        self.blockchain : Blockchain = self.fetch_blockchain()
+        self.blockchain : Blockchain = self.fetch_blockchain(difficulty,transactions)
 
     def push_block(self,block : Block):
         block_dict = block.to_dict()
@@ -42,7 +42,7 @@ class sql_handler:
         else:
             return None
         
-    def fetch_blockchain(self):
+    def fetch_blockchain(self,difficulty=4,transactions=1):
         '''This is a function to fetch the blockchain from the database (type : Blockchain)'''
         current_list = self.db.execute('SELECT * FROM blockchain')
 
@@ -51,11 +51,11 @@ class sql_handler:
             for i in range(0,len(current_list)):
                 block_temp = Block.from_dict(json.loads(current_list[i]['block_json']))
                 chain.append(block_temp)
-            blockchain = Blockchain()
+            blockchain = Blockchain(difficulty=difficulty,transactions=transactions)
             blockchain.chain = chain
             return blockchain
         else:
-            blockchain = Blockchain()
+            blockchain = Blockchain(difficulty=difficulty,transactions=transactions)
             self.blockchain = blockchain
             return blockchain
 
