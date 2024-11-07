@@ -20,7 +20,6 @@ DATABASE_USER = "voters.db"
 init_db(DATABASE=DATABASE)
 User.init_db.init_db(DATABASE=DATABASE_USER)
 
-
 # app
 app = Flask(__name__)
 
@@ -48,36 +47,44 @@ def broadcast_block():
     block_dict = new_block.to_dict()
     for node in nodes_set:
         try:
-            requests.post(f'http://{node}/append_block', json=json.dumps(block_dict))
+            r = requests.post(f'http://{node}/append_block', json=json.dumps(block_dict))
+            print(r.content)
         except requests.exceptions.RequestException as e:
             print(f"Could not reach node {node}: {e}")
 
 @app.route('/')
 def home():
-    print(nodes_set)
-    broadcast_block()
     return redirect('/blockchain')
 
 @app.route('/append_block', methods=['POST'])
 def append_block():
     global pending_blocks
+    global limit_pending
     values = request.get_json()
     block = Block.from_dict(json.loads(values))
-    if block.index == handler.blockchain.chain[-1].index + 1 or (pending_blocks and block.index == pending_blocks[-1].index):
+    if pending_blocks!=[]:
+        temp = (block.index == pending_blocks[-1].index)
+    else:
+        temp = False    
+    if (block.index == (handler.blockchain.chain[-1].index + 1)) or temp:
         pending_blocks.append(block)
-    if len(pending_blocks) > limit_pending:
-        for i in range(len(pending_blocks)):
-            if prev_hash == pending_blocks[i].previous_hash:
-                hash = pending_blocks[i].hash
-                curr_hash = pending_blocks[i].compute_hash()
-                if curr_hash == hash:
-                    pending_blocks[i].hash = hash
-                    prev_hash = hash
+        print(pending_blocks)
+        if len(pending_blocks) > limit_pending:
+            prev_hash = handler.blockchain.chain[-1].hash
+            for i in range(len(pending_blocks)):
+                if prev_hash == pending_blocks[i].previous_hash:
+                    hash = pending_blocks[i].hash
+                    curr_hash = pending_blocks[i].compute_hash()
+                    if curr_hash == hash:
+                        handler.blockchain.add_block(pending_blocks[i])
+                        return jsonify({'validity': True, 'index': i}), 201
+                    else:
+                        pending_blocks = pending_blocks[:pending_blocks[i - 1].index]
+                        return jsonify({'validity': False, 'index': pending_blocks[i - 1].index}), 500
                 else:
-                    pending_blocks = pending_blocks[:pending_blocks[i - 1].index]
-                    return jsonify({'validity': False, 'index': pending_blocks[i - 1].index}), 500
-            else:
-                return jsonify({'validity': False, 'index': pending_blocks[i].index}), 500
+                    return jsonify({'validity': False, 'index': pending_blocks[i].index}), 500
+        else:
+            return jsonify({'validity': True, 'index': None}), 201
     else:
         return jsonify({'validity': True, 'index': None}), 201
 
@@ -92,13 +99,9 @@ def add_transaction():
     temp = handler.add_vote(new_transaction)
     if isinstance(temp, bool) and temp:
         broadcast_block()
-        for node in nodes_set:
-            requests.get(f'http://{node}/nodes/resolve')
         return jsonify({"message": "Vote cast successfully!"}), 201
     elif isinstance(temp,dict) and temp.get('status') == True:
         broadcast_block()
-        for node in nodes_set:
-            requests.get(f'http://{node}/nodes/resolve')
         return jsonify({"message": f"Vote cast successfully!\nTime: {temp['transaction_times'][new_transaction['public_key']]} seconds"}), 201
     else:
         handler.push_blockchain()
