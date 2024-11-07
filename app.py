@@ -1,11 +1,14 @@
 from flask import Flask, render_template, request, redirect, session,url_for
 from flask_login import login_required, LoginManager, UserMixin, login_user, logout_user,current_user
-from User.hash_method import  hashing_password,login_hash
+from User.hash_method import hashing_password,login_hash
+# from User.asymmetric_keys import generate_key_pair,sign_vote,verify_vote
 from User.init_db import init_db
 from flask_session import Session
 from cs50 import SQL
 import requests
 import secrets
+import json
+import time
 
 app = Flask(__name__)
 
@@ -132,10 +135,15 @@ def vote():
         print(voted)
         if voted and voted[0]['voted'] == 0:
             candidates = db.execute('SELECT * FROM candidates')
-            print(candidates)
             return render_template('vote.html', USER_INFO=data, candidates=candidates)
         else:
-            return render_template('gotvote.html', USER_INFO=data, error="You have already voted!")
+            dictionary = {'public_key':
+                          db.execute('SELECT salt FROM users WHERE user = ?', (data,))[0]['salt']
+                        }
+            r = requests.post('http://127.0.0.1:5001/verify_vote', json=dictionary)
+            block = json.loads(r.content)
+            print(block)
+            return render_template('gotvote.html', USER_INFO=data,block=block, error="You have already voted!")
 
     elif request.method == 'POST':
         data = session.get('name')
@@ -147,11 +155,12 @@ def vote():
         # Create a new transaction in the blockchain for the vote
         new_transaction = {
         'public_key':db.execute('SELECT salt FROM users WHERE user = ?', (data,))[0]['salt'],
-        'vote':f"{candidate}"
-    }
+        'vote':f"{candidate}",
+        'time':time.time()
+        }
         try:
-            r = requests.post('http://127.0.0.1:5001/add_transaction', json=new_transaction)
-            r.raise_for_status()  # Ensure the request was successful
+            r = requests.post('http://127.0.0.1:5001/add_vote', json=new_transaction)
+            r.raise_for_status()
             print("........")
             # Update vote count and user status in the database
             db.execute('UPDATE users SET voted = ? WHERE user = ?', 1, session.get('name'))
@@ -163,8 +172,7 @@ def vote():
 @login_required
 def result():       
     candidates = db.execute('SELECT * FROM candidates;')
-    print(candidates)
-    # lead=lead
+    r = requests.post('http://127.0.0.1:5001/result')
     return render_template('result.html',USER_INFO=session.get('name'),candidates=candidates)
 
 @app.errorhandler(401)

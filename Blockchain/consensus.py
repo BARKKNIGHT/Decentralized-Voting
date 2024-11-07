@@ -4,45 +4,53 @@ from Blockchain.block import Block
 from Blockchain.blockchain import Blockchain
 from Blockchain.sql_handler import sql_handler
 
-def register_node(nodes, address):
+def startswith(block : Block,zeros):
+    if block.hash[:len(zeros)]== zeros:
+        return True
+    else:
+        return False
+
+def valid_proof(last_block, block,difficulty):
     """
-    Add a new node to the list of nodes
-    :param address: Address of node. Eg. 'http://192.168.0.5:5000'
+    Validate the block's proof of work by ensuring the hash has a specified number of leading zeroes.
+    :param last_block: The previous block in the chain
+    :param block: The current block to validate
+    :return: True if the block's hash meets the difficulty criteria, False otherwise
     """
-    parsed_url = urlparse(address)
-    nodes.add(parsed_url.netloc)
+    # Verify the block's hash starts with the number of zeroes defined by the difficulty level
+    return startswith(block,'0' * difficulty) and block.previous_hash == last_block.hash
 
-def valid_chain(blockchain, chain):
-    """
-    Determine if a given blockchain is valid
-    :param chain: A blockchain
-    :return: True if valid, False if not
-    """
-    last_block = chain[0]
-    current_index = 1
+def valid_chain(chain):
+        """
+        Determine if a given blockchain is valid
+        :param chain: A blockchain
+        :return: True if valid, False if not
+        """
+        last_block = chain[0]
+        current_index = 1
 
-    while current_index < len(chain):
-        block = chain[current_index]
-        # Check that the hash of the block is correct
-        if block.previous_hash != last_block.hash:
-            return False
+        while current_index < len(chain):
+            block = chain[current_index]
+            # Check that the hash of the block is correct
+            if block.previous_hash != last_block.hash:
+                return False
 
-        # Check that the Proof of Work is correct
-        if not block.valid_proof(last_block, block):
-            return False
+            # Check that the Proof of Work is correct
+            if not valid_proof(last_block, block,4):
+                return False
 
-        last_block = block
-        current_index += 1
+            last_block = block
+            current_index += 1
 
-    return True
+        return True
 
-def resolve_conflicts(blockchain,nodes):
+def resolve_conflicts(blockchain: Blockchain):
     """
     This is our consensus algorithm, it resolves conflicts
     by replacing our chain with the longest one in the network.
     :return: True if our chain was replaced, False if not
     """
-    neighbours = nodes
+    neighbours = blockchain.peer_nodes
     new_chain = None
 
     # We're only looking for chains longer than ours

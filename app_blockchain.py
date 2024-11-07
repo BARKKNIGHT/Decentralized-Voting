@@ -1,135 +1,190 @@
-from flask import Flask, render_template, request, redirect, session, abort,url_for,jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from Blockchain.block import Block
 from Blockchain.blockchain import Blockchain
 from Blockchain.sql_handler import sql_handler
 from Blockchain.init_db import init_db
-from Blockchain.consensus import register_node,resolve_conflicts,valid_chain
-from cs50 import SQL
+import User.init_db
+from Blockchain.consensus import valid_chain
 from urllib.parse import urlparse
+import json
+from cs50 import SQL
 import requests
 import secrets
 import os
-import sqlite3
 
 # Database setup
 DATABASE = "blockchain.db"
+DATABASE_USER = "voters.db"
 
 # initialize the database
 init_db(DATABASE=DATABASE)
+User.init_db.init_db(DATABASE=DATABASE_USER)
 
+# app
 app = Flask(__name__)
 
-handler = sql_handler(DATABASE=DATABASE)
-
-# List to store known nodes in the network
-nodes_set = set()
-
-nodes_set.add("http://127.0.0.1:5002")
-
-#init blockchain
-blockchain = handler.init_blockchain()
-
-print("Blockchain:",blockchain.chain)
-
+# blockchain handlers
+handler = sql_handler(DATABASE=DATABASE, DATABASE_USER=DATABASE_USER)
 app.config['SECRET_KEY'] = secrets.token_hex(16)
 
+# Database handler
 db = SQL(f"sqlite:///{DATABASE}")
 
-# Routes
+# pending blocks
+pending_blocks = []
+limit_pending = 6  # limit number of pending blocks
+
+# List to store known nodes in the network
+cursor = db.execute('SELECT * FROM peers;')
+nodes_set = set()
+if cursor!=[]:
+    for i in cursor:
+        nodes_set.add(i['peers'])
+
+def broadcast_block():
+    """Broadcast the latest block to all nodes in the network."""
+    new_block = handler.blockchain.chain[-1]
+    block_dict = new_block.to_dict()
+    for node in nodes_set:
+        try:
+            r = requests.post(f'http://{node}/append_block', json=json.dumps(block_dict))
+            print(r.content)
+        except requests.exceptions.RequestException as e:
+            print(f"Could not reach node {node}: {e}")
+
 @app.route('/')
 def home():
     return redirect('/blockchain')
 
+@app.route('/append_block', methods=['POST'])
+def append_block():
+    global pending_blocks
+    global limit_pending
+    values = request.get_json()
+    block = Block.from_dict(json.loads(values))
+    if pending_blocks!=[]:
+        temp = (block.index == pending_blocks[-1].index)
+    else:
+        temp = False    
+    if (block.index == (handler.blockchain.chain[-1].index + 1)) or temp:
+        pending_blocks.append(block)
+        print(pending_blocks)
+        if len(pending_blocks) > limit_pending:
+            prev_hash = handler.blockchain.chain[-1].hash
+            for i in range(len(pending_blocks)):
+                if prev_hash == pending_blocks[i].previous_hash:
+                    hash = pending_blocks[i].hash
+                    curr_hash = pending_blocks[i].compute_hash()
+                    if curr_hash == hash:
+                        handler.blockchain.add_block(pending_blocks[i])
+                        return jsonify({'validity': True, 'index': i}), 201
+                    else:
+                        pending_blocks = pending_blocks[:pending_blocks[i - 1].index]
+                        return jsonify({'validity': False, 'index': pending_blocks[i - 1].index}), 500
+                else:
+                    return jsonify({'validity': False, 'index': pending_blocks[i].index}), 500
+        else:
+            return jsonify({'validity': True, 'index': None}), 201
+    else:
+        return jsonify({'validity': True, 'index': None}), 201
+
 @app.route('/get_chain', methods=['GET'])
 def get_chain():
-    chain_data = []
-    for block in blockchain.chain:
-        chain_data.append(block.__dict__)
-    return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(nodes)})
+    chain_data = [block.to_dict() for block in handler.blockchain.chain]
+    return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(nodes_set)})
 
-# Update the add_transaction function to broadcast changes
-@app.route('/add_transaction', methods=['POST'])
+@app.route('/add_vote', methods=['POST'])
 def add_transaction():
     new_transaction = request.json
-    if blockchain.add_vote(new_transaction):
-        blockchain.mine_pending_votes()
-        handler.push_blockchain(blockchain)
-        print(new_transaction)
-
-        return jsonify({"message": "Transaction added and broadcasted", "transaction": new_transaction}), 201
+    temp = handler.add_vote(new_transaction)
+    if isinstance(temp, bool) and temp:
+        broadcast_block()
+        return jsonify({"message": "Vote cast successfully!"}), 201
+    elif isinstance(temp,dict) and temp.get('status') == True:
+        broadcast_block()
+        return jsonify({"message": f"Vote cast successfully!\nTime: {temp['transaction_times'][new_transaction['public_key']]} seconds"}), 201
     else:
-        handler.push_blockchain(blockchain)
-        return jsonify({"message":"User already voted!"}),500
+        handler.push_blockchain()
+        for node in nodes_set:
+            requests.get(f'http://{node}/nodes/resolve')
+        return jsonify({"message": "User already voted!"}), 500
 
 @app.route('/blockchain', methods=['GET'])
 def view_blockchain():
-    chain = blockchain.chain  # Get the current chain
+    chain = handler.blockchain.chain
     return render_template('blockchain.html', blockchain=chain)
 
 @app.route('/mine', methods=['GET'])
 def mine_block():
-    blockchain.mine_pending_votes()  # Mine all pending transactions
-    handler.push_blockchain(blockchain=blockchain) #update the database with the current blockchain
+    handler.blockchain.mine_pending_votes()
+    handler.push_blockchain()
+    broadcast_block()
+    resolve_conflicts()
     return redirect(url_for('view_blockchain'))
 
 @app.route('/validate', methods=['GET'])
 def validate_blockchain():
-    is_valid = blockchain.is_chain_valid()
+    is_valid = handler.blockchain.is_chain_valid()
     return render_template('validate.html', is_valid=is_valid)
+
+@app.route('/verify_vote',methods=['GET','POST'])
+def verify_vote():
+    pub_key = request.json['public_key']
+    vote = handler.verify_vote(pub_key)
+    return vote
 
 @app.route('/result')
 def result():
-        vote_counts = []
-        for block in blockchain.chain:
-            for transaction in block.transactions:
-                if isinstance(transaction, dict) and 'vote' in transaction:
-                    vote = transaction['vote']
-                    vote_counts[vote] = vote_counts.get(vote, 0) + 1
-        return vote_counts
+    votes = handler.calculate_votes()
+    return render_template('result.html', candidates=votes)
 
 @app.route('/nodes/register', methods=['POST'])
 def register_nodes():
     values = request.get_json()
-
-    nodes = values.get('nodes')
+    nodes = values['nodes']
     if nodes is None:
         return "Error: Please supply a valid list of nodes", 400
-
     for node in nodes:
-        consensus.register_node(nodes_set,node)
-
-    response = {
-        'message': 'New nodes have been added',
-        'total_nodes': list(nodes_set),
-    }
-    return jsonify(response), 201
+        if node not in nodes_set:
+            nodes_set.add(node)
+            db.execute('INSERT INTO peers(peers) VALUES (?)',node)
+    return jsonify({'message': 'New nodes have been added', 'total_nodes': list(nodes_set)}), 201
 
 @app.route('/nodes/resolve', methods=['GET'])
 def consensus():
-    replaced = consensus.resolve_conflicts(blockchain,nodes_set)
-
+    """Resolve conflicts by replacing the chain with the longest one in the network."""
+    replaced = resolve_conflicts()
     if replaced:
-        response = {
-            'message': 'Our chain was replaced',
-            'new_chain': blockchain.chain
-        }
+        return jsonify({"message": "Chain was replaced with a longer, valid chain."}), 200
     else:
-        response = {
-            'message': 'Our chain is authoritative',
-            'chain': blockchain.chain
-        }
+        return jsonify({"message": "This chain is already the longest, no replacement occurred."}), 200
 
-    return jsonify(response), 200
+def resolve_conflicts():
+    """Resolve conflicts by replacing our chain with the longest one in the network."""
+    longest_chain = None
+    max_length = len(handler.blockchain.chain)
+    for node in nodes_set:
+        try:
+            print(node)
+            response = requests.get(f'http://{node}/get_chain')
+            print(response)
+            if response.status_code == 200:
+                chain_data = response.json()
+                length = chain_data['length']
+                chain = [Block.from_dict(b) for b in chain_data['chain']]
+                if length > max_length and valid_chain(chain):
+                    max_length = length
+                    longest_chain = chain
+        except requests.exceptions.RequestException as e:
+            print(f"Error connecting to node {node}: {e}")
+
+    if longest_chain:
+        handler.blockchain.chain = longest_chain
+        handler.push_blockchain()
+        return True
+    return False
 
 if __name__ == '__main__':
-    from argparse import ArgumentParser
-
-    parser = ArgumentParser()
-    parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
-    args = parser.parse_args()
-    port = args.port
-
+    port = 5001  # Default port; adjust for other nodes
+    resolve_conflicts()
     app.run(host='0.0.0.0', port=port)
-
-
-

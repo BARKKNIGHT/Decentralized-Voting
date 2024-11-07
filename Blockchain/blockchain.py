@@ -1,20 +1,20 @@
 from .block import Block
+import requests
 import time
 
 class Blockchain:
+    # Number of transactions before a block is hashed.
     transactions = 1
-    def __init__(self,chain = None) -> None:
-        self.pending_transactions = []
-        self.chain = chain if chain is not None else []
-        if not self.chain:  # If no blocks found in input params, create a genesis block
-            self._create_genesis_block()
+    # blockchain structure : 
+    def __init__(self): 
+        self.chain: list[Block] = []
+        self.pending_transactions: list[dict] = []
+        # Initialize with genesis block
+        self._create_genesis_block()
 
     def _create_genesis_block(self): #first block
         genesis = Block(0)
         self.add_block(genesis)
-
-    def add_transaction(self, transaction): #append transactions in a buffer
-        self.pending_transactions.append(transaction)
     
     def add_block(self,block : Block): #append block to chain
         if self.verify_unique_node(block)==1:
@@ -32,21 +32,31 @@ class Blockchain:
     def mine_pending_votes(self): #push pending transactions into a new block(max transacs = 6) and (min transacs = 1)
         last_block = self.get_last_block()
         if len(self.pending_transactions)>Blockchain.transactions-1:
+            start_time = time.time()
             new_block = Block(index=last_block.index + 1, 
                                 previous_hash=last_block.hash, 
-                                transactions=self.pending_transactions[0:Blockchain.transactions])
+                                transactions=self.pending_transactions[0:Blockchain.transactions],
+                                public_keys = ([x['public_key'] for x in self.pending_transactions[0:Blockchain.transactions]])
+                            )
             self.pending_transactions = self.pending_transactions[Blockchain.transactions:]
             new_block.nonce = self.proof_of_work(new_block)
-            print(self.add_block(new_block))
+            self.add_block(new_block)
+            stop_time = time.time()
+            transaction_times = {
+                x['public_key']: stop_time - x['time'] for x in new_block.transactions
+            }
+            return {'status':True,'time':stop_time-start_time,'transaction_times':transaction_times}
+        return {'status':False}
 
-    def proof_of_work(self, block : Block, difficulty=4)->int: #Calculate PoW for a block (get a nonce value that satisfies difficulty)
+    @staticmethod
+    def proof_of_work(block : Block, difficulty=4)->int: #Calculate PoW for a block (get a nonce value that satisfies difficulty)
         block.nonce = 0
         while not block.hash.startswith('0' * difficulty):
             block.nonce += 1
             block.hash = block.compute_hash()
         return block.nonce
     
-    def is_chain_valid(self)->int:
+    def is_chain_valid(self)->dict:
         prev_hash = 0
         for i in range(0,len(self.chain)):
             if prev_hash == self.chain[i].previous_hash:
@@ -56,16 +66,25 @@ class Blockchain:
                     self.chain[i].hash = hash
                     prev_hash = hash
                 else:
-                    return self.chain[i-1]
+                    return {
+                        'validity':False,
+                        'index':self.chain[i-1].index
+                    }
             else:
-                return self.chain[i]
-        return 0
+                return {
+                    'validity':False,
+                    'index':self.chain[i].index
+                    }
+        return {
+                    'validity':True,
+                    'index': None
+                }
     
     def add_vote(self, vote_transaction):
         if self.has_user_voted(vote_transaction['public_key']):
             return False
         # Add the vote to pending transactions
-        self.add_transaction(vote_transaction)
+        self.pending_transactions.append(vote_transaction)
         return True
 
     
@@ -75,6 +94,9 @@ class Blockchain:
             for transaction in block.transactions:
                 if transaction['public_key'] == public_key:
                     return True  # User has voted
+        for vote in self.pending_transactions:
+            if vote['public_key'] == public_key:
+                return True
         return False  # User has not voted
     
     def verify_unique_node(self,block)->int:
@@ -94,22 +116,47 @@ class Blockchain:
         else:
             return False
 
+    def __calculate_votes__(self):
+        dict_votes = {}
+        for i in range(len(self.chain)):
+            for j in range(len(self.chain[i].transactions)):
+                if (self.chain[i].transactions[j]['vote']) in dict_votes.keys():
+                    dict_votes[self.chain[i].transactions[j]['vote']] += 1
+                else:
+                    dict_votes[self.chain[i].transactions[j]['vote']] = 1
+        return dict_votes
 
-
-    
 # blockchain = Blockchain()
 # print(blockchain.get_last_block())
 # start_time = time.time()
-# for i in range(0,12):
-#     blockchain.add_transaction(f"Alice pays BOB ${i}.")
-#     blockchain.mine_pending_transactions()
+# for i in range(0,6):
+#     vote = {
+#         'public_key' : f'Alice{i}',
+#         'vote' : 'bob'
+#     }
+#     blockchain.add_vote(vote)
+#     # print(blockchain.pending_transactions)
+#     test = blockchain.mine_pending_votes()
+#     if test['status'] == True:  
+#         print(i,":",test['time'])
 
-# end_time = time.time()
-# print("mining time is:",end_time-start_time)
-# print(blockchain.chain)
+# for i in range(6,13):
+#     vote = {
+#         'public_key' : f'Alice{i}',
+#         'vote' : 'bob'
+#     }
+#     blockchain.add_vote(vote)
+#     # print(blockchain.pending_transactions)
+#     test = blockchain.mine_pending_votes()
+#     if test['status'] == True:
+#         print(i,":",test['time'])
 
-# blockchain.chain[1].hash = 0
+# print(blockchain.pending_transactions)
+# # blockchain.chain[2].hash = 0
+# # print("Chain is:",blockchain.chain)
 
 # print("Is the chain valid?")
-# print(blockchain.chain[0].to_dict())
+# dict = blockchain.chain[1].to_dict()
+# print(dict)
 # print(blockchain.is_chain_valid())
+# print(blockchain.__calculate_votes__())
