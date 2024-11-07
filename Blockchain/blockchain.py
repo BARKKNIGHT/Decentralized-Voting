@@ -35,10 +35,10 @@ class Blockchain:
             start_time = time.time()
             new_block = Block(index=last_block.index + 1, 
                                 previous_hash=last_block.hash, 
-                                transactions=self.pending_transactions[0:Blockchain.transactions],
-                                public_keys = ([x['public_key'] for x in self.pending_transactions[0:Blockchain.transactions]])
+                                transactions=self.pending_transactions[0:self.transactions],
+                                public_keys = ([x['public_key'] for x in self.pending_transactions[0:self.transactions]])
                             )
-            self.pending_transactions = self.pending_transactions[Blockchain.transactions:]
+            self.pending_transactions = self.pending_transactions[self.transactions:]
             new_block.nonce = self.proof_of_work(new_block,self.difficulty)
             self.add_block(new_block)
             stop_time = time.time()
