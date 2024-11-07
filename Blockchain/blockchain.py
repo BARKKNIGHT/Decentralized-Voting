@@ -125,38 +125,3 @@ class Blockchain:
                 else:
                     dict_votes[self.chain[i].transactions[j]['vote']] = 1
         return dict_votes
-
-# blockchain = Blockchain()
-# print(blockchain.get_last_block())
-# start_time = time.time()
-# for i in range(0,6):
-#     vote = {
-#         'public_key' : f'Alice{i}',
-#         'vote' : 'bob'
-#     }
-#     blockchain.add_vote(vote)
-#     # print(blockchain.pending_transactions)
-#     test = blockchain.mine_pending_votes()
-#     if test['status'] == True:  
-#         print(i,":",test['time'])
-
-# for i in range(6,13):
-#     vote = {
-#         'public_key' : f'Alice{i}',
-#         'vote' : 'bob'
-#     }
-#     blockchain.add_vote(vote)
-#     # print(blockchain.pending_transactions)
-#     test = blockchain.mine_pending_votes()
-#     if test['status'] == True:
-#         print(i,":",test['time'])
-
-# print(blockchain.pending_transactions)
-# # blockchain.chain[2].hash = 0
-# # print("Chain is:",blockchain.chain)
-
-# print("Is the chain valid?")
-# dict = blockchain.chain[1].to_dict()
-# print(dict)
-# print(blockchain.is_chain_valid())
-# print(blockchain.__calculate_votes__())
