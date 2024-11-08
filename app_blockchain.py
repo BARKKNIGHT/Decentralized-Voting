@@ -30,10 +30,6 @@ app.config['SECRET_KEY'] = secrets.token_hex(16)
 # Database handler
 db = SQL(f"sqlite:///{DATABASE}")
 
-# pending blocks
-pending_blocks = []
-limit_pending = 6  # limit number of pending blocks
-
 # List to store known nodes in the net
 cursor = db.execute('SELECT * FROM peers;')
 nodes_set = set()
@@ -57,37 +53,25 @@ def home():
 
 @app.route('/append_block', methods=['POST'])
 def append_block():
-    global pending_blocks
-    global limit_pending
     values = request.get_json()
-    block = Block.from_dict(json.loads(values))
-    if pending_blocks!=[]:
-        temp = (block.index == pending_blocks[-1].index)
-    else:
-        temp = False    
-    if (block.index == (handler.blockchain.chain[-1].index + 1)) or temp:
-        pending_blocks.append(block)
-        if len(pending_blocks) > limit_pending:
-            prev_hash = handler.blockchain.chain[-1].hash
-            for i in range(len(pending_blocks)):
-                if prev_hash == pending_blocks[i].previous_hash:
-                    hash = pending_blocks[i].hash
-                    curr_hash = pending_blocks[i].compute_hash()
-                    if curr_hash == hash:
-                        handler.blockchain.add_block(pending_blocks[i])
-                        return jsonify({'validity': True, 'index': i}), 201
-                    else:
-                        pending_blocks = pending_blocks[:pending_blocks[i - 1].index]
-                        return jsonify({'validity': False, 'index': pending_blocks[i - 1].index}), 500
-                else:
-                    return jsonify({'validity': False, 'index': pending_blocks[i].index}), 500
+    block = Block.from_dict(json.loads(values)) 
+    if (block.index == (handler.blockchain.chain[-1].index + 1)):
+        prev_hash = handler.blockchain.chain[-1].hash
+        if prev_hash == block.previous_hash:
+            hash = block.hash
+            curr_hash = block.compute_hash()
+            if curr_hash == hash:
+                print(handler.blockchain.add_block(block))
+                return jsonify({'validity': True, 'index': i}), 201
+            else:
+                return jsonify({'validity': False}), 500
         else:
-            return jsonify({'validity': True, 'index': None}), 201
-    else:
-        return jsonify({'validity': True, 'index': None}), 201
+            return jsonify({'validity': False}), 500
 
 @app.route('/get_chain', methods=['GET'])
 def get_chain():
+    # nodes_set.add((request.host_url))
+    print(request.host_url.lstrip('https://'))
     chain_data = [block.to_dict() for block in handler.blockchain.chain]
     return jsonify({"length": len(chain_data), "chain": chain_data, "nodes": list(nodes_set)})
 
