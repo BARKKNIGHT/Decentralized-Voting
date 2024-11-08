@@ -67,6 +67,9 @@ def append_block():
                 return jsonify({'validity': False}), 500
         else:
             return jsonify({'validity': False}), 500
+    else:
+        return jsonify({'validity': False}), 500
+
 
 @app.route('/get_chain', methods=['GET'])
 def get_chain():
