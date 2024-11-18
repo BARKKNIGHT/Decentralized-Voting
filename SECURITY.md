@@ -10,4 +10,4 @@
 | 0.2.2   | :white_check_mark:   |
 
 ## Reporting a Vulnerability
-Mail: <a href="mailto:yatharthk2406@gmail.com">yatharthk2406@gmail.com</a>
+Mail: <a href="mailto:yatharthk2406@gmail.com">mailid</a>
