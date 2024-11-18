@@ -1,8 +1,8 @@
-# Eco_Pathways
+# Decentralized-Voting
 
 Instructions to run:
 1. In your terminal run: ```pip install -r requirements.txt```
-2. Open the Eco_Project folder in your terminal and change the directory to the one containing app.py
+2. Open the Decentralized_voting_Project folder in your terminal and change the directory to the one containing app.py
 3. Then run `app_setup.py` to create user and candidate profiles.
 ##
     python app_setup.py
